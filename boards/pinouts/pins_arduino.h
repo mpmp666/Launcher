@@ -38,6 +38,8 @@
 #include "ESP32S3-4M.h"
 #elif ESP32_DEV
 #include "esp32dev.h"
+#elif XUEERSI_XIAOMIAO
+#include "xueersi-xiaomiao.h"
 #elif MARAUDERMINI
 #include "marauder-mini.h"
 #elif MARAUDERV4
