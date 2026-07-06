@@ -12,6 +12,11 @@
 ** Description:   initial setup for the device
 ***************************************************************************************/
 void _setup_gpio() {
+    launcherGpioOutput(TFT_CS);
+    launcherGpioWrite(TFT_CS, HIGH);
+    launcherGpioOutput(SDCARD_CS);
+    launcherGpioWrite(SDCARD_CS, HIGH);
+
     launcherGpioInputPullup(UP_BTN);
     launcherGpioInputPullup(DW_BTN);
     launcherGpioInputPullup(L_BTN);
