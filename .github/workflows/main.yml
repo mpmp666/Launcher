@@ -109,6 +109,7 @@
             - { env: "elecrow-35B"                }
             - { env: "elecrow-35Bv2_2"            }
             - { env: "waveshare-esp32-s3-lcd-147" }
+            - { env: "xueersi-xiaomiao" }
 
       steps:
           - uses: actions/checkout@v4
