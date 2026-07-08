@@ -8,6 +8,7 @@
 #include "littlefs_patch.h"
 #include "mykeyboard.h"
 #include "partition_table_model.h"
+#include "ram_profile.h"
 #include "sd_functions.h"
 #include <esp_ota_ops.h>
 #include <esp_partition.h>
@@ -157,8 +158,13 @@ void drawRangeSlider(
     tft->drawCentreString(" Confirm/Exit ", tftWidth / 2, barY + 16, 1);
 
     tft->setTextColor(ALCOLOR, BGCOLOR);
-    tft->setCursor(8, tftHeight - (LH * FP + 8));
-    tft->print("Prev/Next move  Sel ok  Esc cancel");
+    
+    // Spread the three hints into left/centre/right columns so they
+    // line up cleanly across the width (matches the touch footer layout).
+    const int hintY = tftHeight - (LH * FP + 8);
+    tft->drawString("[Prev/Next move]", 8, hintY);
+    tft->drawCentreString("[Sel ok]", tftWidth / 2, hintY, 1);
+    tft->drawRightString("[Esc cancel]", tftWidth - 8, hintY, 1);
 }
 
 bool rangeSlider(
@@ -632,6 +638,7 @@ bool applyPartitionChanges(const LauncherPartitionTable &table) {
 } // namespace
 
 void partList() {
+    RAM_LOG("partList-start");
     int idx = 0;
     LauncherPartitionTable table;
     bool dirty = false;
@@ -987,9 +994,10 @@ void partitionCrawler() {
     }
 }
 
-bool attachPartition(String _from, String _to) {
+bool attachPartition(const String &_from, String _to) {
     size_t offset = 0;
     uint8_t bytes[16];
+    uint8_t buff[bufSize]; // on-demand copy buffer (was a resident global, see docs/milestone_2.md)
     launcherConsolePrintf("From: %s\nTo: %s\n", _from.c_str(), _to.c_str());
     File to = SDM.open(_to, FILE_READ);
     if (!to) {

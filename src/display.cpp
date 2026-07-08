@@ -5,6 +5,7 @@
 #include "mykeyboard.h"
 #include "onlineLauncher.h"
 #include "powerSave.h"
+#include "ram_profile.h"
 #include "sd_functions.h"
 #include "settings.h"
 #include <cstring>
@@ -289,7 +290,8 @@ void initDisplayLoop() {
 ** Description:   Display Version on Screen before instalation
 ***************************************************************************************/
 void displayCurrentVersion(
-    String name, String author, String version, String published_at, int versionIndex, JsonArray versions
+    const String &name, const String &author, const String &version, const String &published_at,
+    int versionIndex, JsonArray versions
 ) {
     // tft->fillScreen(BGCOLOR);
     tft->fillRect(0, tftHeight - 5, tftWidth, 5, BGCOLOR);
@@ -349,13 +351,14 @@ void displayCurrentVersion(
 ** Function name: displayRedStripe
 ** Description:   Display Red Stripe with information
 ***************************************************************************************/
-void displayRedStripe(String text, uint16_t fgcolor, uint16_t bgcolor) {
+void displayRedStripe(const String &text, uint16_t fgcolor, uint16_t bgcolor) {
     // save tft settings before showing the stripe
     int _size = tft->getTextsize();
     int _x = tft->getCursorX();
     int _y = tft->getCursorY();
     uint16_t _color = tft->getTextcolor();
     uint16_t _bgcolor = tft->getTextbgcolor();
+    Serial.println(String("Display Red Stripe: ") + text);
 
 #if E_PAPER_DISPLAY
     bgcolor = BLACK;
@@ -958,6 +961,9 @@ void drawBatteryStatus(uint8_t bat) {
 int loopOptions(std::vector<Option> &options, bool bright, uint16_t al, uint16_t bg, bool border, int index) {
     bool redraw = true;
     bool exit = false;
+#if defined(HAS_TOUCH)
+    bool escRequested = false; // set only by the explicit [ESC] label (touch, border==false)
+#endif
     log_i("Number of options: %d", options.size());
     int numOpt = options.size() - 1;
     Opt_Coord coord;
@@ -1003,7 +1009,7 @@ int loopOptions(std::vector<Option> &options, bool bright, uint16_t al, uint16_t
                     resetGlobals();
                     if (item.name == "") {
                         if (item.text == "ESC") {
-                            EscPress = true;
+                            escRequested = true;
                         } else {
                             if (item.text == "+") index = max_idx + 1;
                             if (item.text == "-") index = min_idx - 1;
@@ -1082,7 +1088,24 @@ int loopOptions(std::vector<Option> &options, bool bright, uint16_t al, uint16_t
             break;
         }
 
+#if defined(HAS_TOUCH)
+        // Full-screen list menus (border == false) draw their own explicit
+        // [ESC] label as the back target. The global top-left heat-map ESC zone
+        // (utils.cpp touchHeatMap: x < tftWidth/3 && y < 50) overlaps the first
+        // list rows on tall screens, and because check(EscPress) both polls the
+        // touch controller and consumes the flag, honouring it here makes the
+        // first couple of items impossible to select (they exit to the menu).
+        // So ignore the heat-map ESC for these menus; the [ESC] label still
+        // exits. Bordered pop-ups (no [ESC] label) keep the corner gesture.
+        if (border == false) {
+            if (escRequested || returnToMenu || exit) return -1;
+            EscPress = false; // swallow any stray heat-map ESC over the list rows
+        } else {
+            if (check(EscPress) || returnToMenu || exit) return -1;
+        }
+#else
         if (check(EscPress) || returnToMenu || exit) return -1;
+#endif
     }
     if (border) tft->fillScreen(BGCOLOR);
 #if defined(HAS_TOUCH)
@@ -1098,7 +1121,7 @@ int loopOptions(std::vector<Option> &options, bool bright, uint16_t al, uint16_t
 **  Function: loopVersions
 **  Where you choose which version to install/download **
 **********************************************************************/
-void loopVersions(String _fid) {
+void loopVersions(const String &_fid) {
     JsonDocument item = getVersionInfo(_fid);
     if (item.isNull()) { return; }
     int versionIndex = 0;
@@ -1335,14 +1358,16 @@ RESTART:
     }
     if (!returnToMenu && index >= 0) goto RESTART;
     doc.clear();
+    RAM_LOG("firmwareList-doc-cleared");
 }
 
 /*********************************************************************
 **  Function: tftprintln
 **  similar to tft->println(), but allows to include margin
 **********************************************************************/
-void tftprintln(String txt, int margin, int numlines) {
-    int size = txt.length();
+void tftprintln(const String &txt, int margin, int numlines) {
+    String rem = txt; // working copy: consumed line by line below
+    int size = rem.length();
     if (numlines == 0) numlines = (tftHeight - 2 * margin) / (tft->getTextsize() * 8);
     int nchars = (tftWidth - 2 * margin) / (6 * tft->getTextsize()); // 6 pixels of width fot a letter size 1
     int x = tft->getCursorX();
@@ -1351,8 +1376,8 @@ void tftprintln(String txt, int margin, int numlines) {
         if (tft->getCursorX() < margin) tft->setCursor(margin, tft->getCursorY());
         nchars = (tftWidth - tft->getCursorX() - margin) /
                  (6 * tft->getTextsize()); // 6 pixels of width fot a letter size 1
-        tft->println(txt.substring(0, nchars));
-        txt = txt.substring(nchars);
+        tft->println(rem.substring(0, nchars));
+        rem = rem.substring(nchars);
         size -= nchars;
         numlines--;
     }
@@ -1361,8 +1386,9 @@ void tftprintln(String txt, int margin, int numlines) {
 **  Function: tftprintln
 **  similar to tft->println(), but allows to include margin
 **********************************************************************/
-void tftprint(String txt, int margin, int numlines) {
-    int size = txt.length();
+void tftprint(const String &txt, int margin, int numlines) {
+    String rem = txt; // working copy: consumed line by line below
+    int size = rem.length();
     if (numlines == 0) numlines = (tftHeight - 2 * margin) / (tft->getTextsize() * 8);
     int nchars = (tftWidth - 2 * margin) / (6 * tft->getTextsize()); // 6 pixels of width fot a letter size 1
     int x = tft->getCursorX();
@@ -1373,8 +1399,8 @@ void tftprint(String txt, int margin, int numlines) {
         if (tft->getCursorX() < margin) tft->setCursor(margin, tft->getCursorY());
         nchars = (tftWidth - tft->getCursorX() - margin) /
                  (6 * tft->getTextsize()); // 6 pixels of width fot a letter size 1
-        tft->print(txt.substring(0, nchars));
-        txt = txt.substring(nchars);
+        tft->print(rem.substring(0, nchars));
+        rem = rem.substring(nchars);
         size -= nchars;
         numlines--;
         prim = false;
